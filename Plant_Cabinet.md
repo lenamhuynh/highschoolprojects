@@ -47,4 +47,5 @@ The water box has two openings. The first one is to leave a gap to connect the p
 There is a circuit breaker, which stops the electricity flow when the current reaches an unsafe level, and a 24V power source for the fan and pump next to the electrical box. The interior of the box can be seen, too
 
 ![Final Setup](cabinet_images/Final_Setup.jpg)
+
 This is the final setup of the cabinet to grow plants. Mustard green seeds are chosen, so they have been buried to germinate and be grown automatically. The conditions to switch on/off can be changed through the cloud server of the Blynk app, and the data received from the sensors can be seen by the user from the desktop/mobile version, so there is no need for human interactions (except from filling up water for the water pump)
