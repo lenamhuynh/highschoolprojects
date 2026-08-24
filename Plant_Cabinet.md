@@ -31,3 +31,20 @@ https://youtu.be/XqmHnOMMV8o
 
 ![Completed Circuit](cabinet_images/Completed_Circuit.jpg)
 *This is the completed circuit, with the 24V power source for the ventilation fan and water pump, relay, ESP32, PLC Schneider, sensors, and two light bulbs that use 220VDC"
+
+
+## Final Product
+![Overview](cabinet_images/Overview(1).jpg)
+![Overview](cabinet_images/Overview(2).jpg)
+The overall look of the smart plant cabinet. A water box, which contains the water pump to transfer water through a pipe into the cabinet to water the plants, and an electrical box, where the PLC, ESP32, relays, and terminal blocks are located, are screwed from opposite sides, while the lamps are on the lid. The ventilation fan is screwed to the other side of the cabinet
+
+![Water Box](cabinet_images/Water_Box(1).jpg)
+![Water Box](cabinet_images/Water_Box(1).jpg)
+The water box has two openings. The first one is to leave a gap to connect the pump with the irrigation pipe, and the second one is used to fill water manually after some time for the pump to operate. The pipe is led to the inside of the cabinet, where it is connected to multiple dripper heads to water multiple spots inside. These dripper heads can be modified to increase or decrease the water flow rate, which affects the soil moisture a lot
+
+![Electrical Box](cabinet_images/Electrical_Box(1).jpg)
+![Electrical Box](cabinet_images/Electrical_Box(2).jpg)
+There is a circuit breaker, which stops the electricity flow when the current reaches an unsafe level, and a 24V power source for the fan and pump next to the electrical box. The interior of the box can be seen, too
+
+![Final Setup](cabinet_images/Final_Setup(1).jpg)
+This is the final setup of the cabinet to grow plants. Mustard green seeds are chosen, so they have been buried to germinate and be grown automatically. The conditions to switch on/off can be changed through the cloud server of the Blynk app, and the data received from the sensors can be seen by the user from the desktop/mobile version, so there is no need for human interactions (except from filling up water for the water pump)
