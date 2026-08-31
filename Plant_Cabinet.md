@@ -33,7 +33,7 @@ During this process, the label will announce the user that "Cycle # active", and
 For example, if the ESP wakes up once in every 10 minutes, the time it takes  for the Blynk server to turns from "Online" to "Offline" is about 20 minutes. Consequently, it will always show "Online" regarding the condition of the ESP (awake or sleep). If it suddenly turns to "Offline", which means the ESP has not responded for a long time, there might be some troubles*
 
 ![Completed Circuit](cabinet_images/Completed_Circuit.jpg)
-*This is the completed circuit, with the 24V power source for the ventilation fan and water pump, relay, ESP32, PLC Schneider, sensors, and two light bulbs that use 220VDC"
+*This is the completed circuit, with the 24V power source for the ventilation fan and water pump, relay, ESP32, PLC Schneider, sensors, and two light bulbs that use 220VDC*
 
 
 ## Final Product
