@@ -1,0 +1,267 @@
+#define BLYNK_TEMPLATE_ID "TMPL6OZ6y5TrH"
+#define BLYNK_TEMPLATE_NAME "Led ON and OFF"
+#define BLYNK_PRINT Serial
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include "DHT.h"
+#include "driver/gpio.h"
+#include <WidgetRTC.h>
+
+char auth[] = "pJ0AhvMaHpMfgNg4WXfyfLwP0usc_4Mq";
+char ssid[] = "";
+char pass[] = "";
+
+
+#define DHTPIN 4
+#define DHTTYPE DHT11
+
+#define STATUS V10
+
+#define SOIL_PIN 35
+#define SOIL_POWER 19
+
+#define DRY_VALUE 4095 
+#define WET_VALUE 1100
+
+#define SOIL_OUT_PIN 25   // Input 3 (I3)
+#define LIGHT_OUT_PIN 26  // Input 2 (I2)
+#define TEMP_OUT_PIN 27   // Input 1 (I1)
+#define STATUS_PIN 21 
+
+
+#define uS_TO_S_FACTOR 1000000ULL  // Microseconds to seconds
+#define TIME_TO_SLEEP  900         // Sleep duration: 15 minutes (900s)
+#define AWAKE_TIME     60000       // Awake duration: 1 minute (60000ms)
+
+DHT dht(DHTPIN, DHTTYPE);
+WidgetRTC rtc;
+
+RTC_DATA_ATTR int temp_upper_threshold = 25;
+RTC_DATA_ATTR int temp_lower_threshold = 20;
+RTC_DATA_ATTR int bright_upper_threshold = 50;
+RTC_DATA_ATTR int bright_lower_threshold = 30;
+RTC_DATA_ATTR int moisture_lower_threshold = 30;
+RTC_DATA_ATTR int moisture_upper_threshold = 60;
+RTC_DATA_ATTR int bootCount = 0;
+
+void processTemperature();
+void processBrightness();
+void processMoisture();
+
+void setup() {
+  Serial.begin(115200);
+  bootCount++; 
+  
+  pinMode(SOIL_POWER, OUTPUT);
+  digitalWrite(SOIL_POWER, LOW); 
+  pinMode(SOIL_OUT_PIN, OUTPUT);
+  pinMode(LIGHT_OUT_PIN, OUTPUT);
+  pinMode(TEMP_OUT_PIN, OUTPUT);
+  pinMode(STATUS_PIN, OUTPUT);
+  digitalWrite(STATUS_PIN, LOW);
+  
+  dht.begin();
+
+  WiFi.begin(ssid, pass);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi Connected! IP: " + WiFi.localIP().toString());
+
+  // Connect to Blynk
+  Blynk.begin(auth, ssid, pass, "blynk.cloud", 80);
+
+  rtc.begin();
+  Blynk.syncVirtual(V2, V3, V4, V5, V6, V7);
+  
+  String activeMessage = "Cycle " + String(bootCount) + " active. Awake for 1 minute";
+  Blynk.virtualWrite(STATUS, activeMessage);
+  
+  unsigned long syncWait = millis();
+  while (millis() - syncWait < 500) {
+    Blynk.run();
+    delay(10);
+  }
+  
+  digitalWrite(STATUS_PIN, HIGH);
+  unsigned long start = millis();
+  bool done = false;
+
+  // Process initial sensor reads
+  processTemperature();
+  processBrightness();
+  processMoisture();
+
+  unsigned long startAwakeTime = millis();
+  unsigned long lastSensorRead = millis();
+  
+  while (millis() - startAwakeTime < AWAKE_TIME) {
+    Blynk.run();
+    
+    if (!done&& (millis() - start >= 1000)) {
+      digitalWrite(STATUS_PIN, LOW);
+      done = true;
+      Serial.println("Sent status update to PLC!");
+    }
+    
+    if (millis() - lastSensorRead >= 10000) {
+      lastSensorRead = millis();
+      processTemperature();
+      processBrightness();
+      processMoisture();
+    }
+    delay(10);
+  }
+
+  // Update status and flush data before sleep
+  String message = "Cycle " + String(bootCount) + " done. Sleeping for 15 minutes";
+  Blynk.virtualWrite(STATUS, message);
+  
+  Serial.println("Flushing network data to Blynk...");
+  unsigned long flushStart = millis();
+  while (millis() - flushStart < 1000) {
+    Blynk.run();
+    delay(10);
+  }
+
+  digitalWrite(TEMP_OUT_PIN, LOW);
+  digitalWrite(LIGHT_OUT_PIN, LOW);
+  digitalWrite(SOIL_OUT_PIN, LOW);
+  digitalWrite(STATUS_PIN, LOW);
+
+  uint64_t sleepTimeUS = (uint64_t)TIME_TO_SLEEP * uS_TO_S_FACTOR;
+  esp_sleep_enable_timer_wakeup(sleepTimeUS);
+
+  Serial.println("Going to deep sleep now for " + String(TIME_TO_SLEEP) + " seconds...");
+  Serial.flush();
+  delay(50);
+
+  esp_deep_sleep_start();
+}
+
+void processTemperature() {
+  float temperature = dht.readTemperature();
+  if (!isnan(temperature)) {
+    if (Blynk.connected()) Blynk.virtualWrite(V31, temperature);
+    
+    if (temperature <= temp_lower_threshold) {
+      digitalWrite(TEMP_OUT_PIN, HIGH);
+    } else if (temperature > temp_upper_threshold) {
+      digitalWrite(TEMP_OUT_PIN, LOW);
+    }
+  } else {
+    Serial.println("Cannot get the temp");
+  }
+}
+
+void processBrightness() {
+  int light = analogRead(34);
+  
+  int currentHour = hour(); 
+  Serial.print("Current time: ");
+  Serial.println(currentHour);
+
+  int brightnessPercent = map(light, 4095, 0, 0, 100);
+  brightnessPercent = constrain(brightnessPercent, 0, 100);
+  
+  if (Blynk.connected()) Blynk.virtualWrite(V0, brightnessPercent);
+  
+  if (currentHour < 6 || currentHour >= 22) {
+    digitalWrite(LIGHT_OUT_PIN, LOW);
+  } else if (brightnessPercent <= bright_lower_threshold) {
+    digitalWrite(LIGHT_OUT_PIN, HIGH);
+  } else if (brightnessPercent > bright_upper_threshold) {
+    digitalWrite(LIGHT_OUT_PIN, LOW);
+  }
+}
+
+void processMoisture() {
+  digitalWrite(SOIL_POWER, HIGH);
+  delay(10);
+  int raw = analogRead(SOIL_PIN);
+  digitalWrite(SOIL_POWER, LOW);
+
+  int moisturePercent = map(raw, DRY_VALUE, WET_VALUE, 0, 100);
+  moisturePercent = constrain(moisturePercent, 0, 100);
+
+  if (Blynk.connected()) Blynk.virtualWrite(V1, moisturePercent);
+
+  if (moisturePercent <= moisture_lower_threshold) {
+    digitalWrite(SOIL_OUT_PIN, HIGH);
+  } else if (moisturePercent > moisture_upper_threshold) {
+    digitalWrite(SOIL_OUT_PIN, LOW);
+  }
+}
+
+BLYNK_WRITE(V2) {
+  temp_upper_threshold = param.asInt();
+  if (temp_upper_threshold < temp_lower_threshold) {
+    temp_upper_threshold = temp_lower_threshold;
+    Blynk.virtualWrite(V2, temp_upper_threshold);
+    Blynk.virtualWrite(V20, "Upper threshold should be higher than or equal to lower threshold");
+  } else {
+    Blynk.virtualWrite(V20, "Thresholds OK");
+  }
+}
+
+BLYNK_WRITE(V3) {
+  temp_lower_threshold = param.asInt();
+  if (temp_lower_threshold > temp_upper_threshold) {
+    temp_lower_threshold = temp_upper_threshold;
+    Blynk.virtualWrite(V3, temp_lower_threshold);
+    Blynk.virtualWrite(V20, "Lower threshold should be lower than or equal to upper threshold");
+  } else {
+    Blynk.virtualWrite(V20, "Thresholds OK");
+  }
+}
+
+BLYNK_WRITE(V4) { 
+  bright_upper_threshold = param.asInt();
+  if (bright_upper_threshold < bright_lower_threshold) {
+    bright_upper_threshold = bright_lower_threshold;
+    Blynk.virtualWrite(V4, bright_upper_threshold);
+    Blynk.virtualWrite(V21, "Upper threshold should be higher than or equal to lower threshold");
+  } else {
+    Blynk.virtualWrite(V21, "Thresholds OK");
+  }
+}
+
+BLYNK_WRITE(V5) {
+  bright_lower_threshold = param.asInt();
+  if (bright_lower_threshold > bright_upper_threshold) {
+    bright_lower_threshold = bright_upper_threshold;
+    Blynk.virtualWrite(V5, bright_lower_threshold);
+    Blynk.virtualWrite(V21, "Lower threshold should be lower than or equal to upper threshold");
+  } else {
+    Blynk.virtualWrite(V21, "Thresholds OK");
+  }
+}
+
+BLYNK_WRITE(V6) {
+  moisture_upper_threshold = param.asInt();
+  if (moisture_upper_threshold < moisture_lower_threshold) {
+    moisture_upper_threshold = moisture_lower_threshold;
+    Blynk.virtualWrite(V6, moisture_upper_threshold);
+    Blynk.virtualWrite(V22, "Upper threshold should be higher than or equal to lower threshold");
+  } else {
+    Blynk.virtualWrite(V22, "Thresholds OK");
+  }
+}
+
+BLYNK_WRITE(V7) {
+  moisture_lower_threshold = param.asInt();
+  if (moisture_lower_threshold > moisture_upper_threshold) {
+    moisture_lower_threshold = moisture_upper_threshold;
+    Blynk.virtualWrite(V7, moisture_lower_threshold);
+    Blynk.virtualWrite(V22, "Lower threshold should be lower than or equal to upper threshold");
+  } else {
+    Blynk.virtualWrite(V22, "Threshold OK");
+  }
+}
+
+void loop() {
+}
